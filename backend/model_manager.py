@@ -3,6 +3,7 @@ import soundfile as sf
 import numpy as np
 import whisper
 import librosa
+import re
 from qwen_tts import Qwen3TTSModel
 from pathlib import Path
 
@@ -144,7 +145,121 @@ class ModelManager:
         elif self.current_model_type == "design":
             return self._generate_design(params)
 
+    def _parse_tagged_text(self, text: str):
+        """
+        Parsa testo con tag emotivi.
+        Input:  "[neutro] Ciao a tutti. [arrabbiato] Chi ha toccato i file?"
+        Output: [("neutro", "Ciao a tutti. "), ("arrabbiato", "Chi ha toccato i file?")]
+
+        Se non ci sono tag, ritorna il testo intero con tag None.
+        """
+        # Pattern per matching tag: [tag]
+        pattern = r"\[([^\]]+)\]\s*"
+
+        # Split il testo mantenendo i delimitatori
+        parts = re.split(pattern, text)
+
+        # Se non ci sono match, ritorna il testo intero
+        if len(parts) == 1:
+            return [(None, text.strip())]
+
+        segments = []
+        current_tag = None
+
+        for i, part in enumerate(parts):
+            if i == 0 and part.strip():
+                # Testo prima del primo tag (senza tag)
+                segments.append((None, part.strip()))
+            elif i % 2 == 1:
+                # Questo è un tag
+                current_tag = part.strip()
+            elif i % 2 == 0 and part.strip():
+                # Questo è il testo dopo il tag
+                segments.append((current_tag, part.strip()))
+
+        return segments
+
+    def _generate_multi_segment(self, segments, personality_config, language="Auto"):
+        """
+        Genera audio per ogni segmento usando il sample audio corrispondente
+        e concatena i risultati.
+
+        Args:
+            segments: Lista di tuple (tag, text) dal parser
+            personality_config: Dict config.json della personalità
+            language: Lingua per la generazione
+
+        Returns:
+            Tuple (wavs, sr) con audio concatenato
+        """
+        audio_chunks = []
+        sample_rate = None
+        emotions_data = personality_config.get("emotions", {})
+
+        for tag, text in segments:
+            if not text.strip():
+                continue
+
+            # Se il tag è None o non esiste, usa il primo disponibile come fallback
+            if tag is None or tag not in emotions_data:
+                if tag is not None:
+                    print(f"Warning: Tag '{tag}' non trovato, uso fallback")
+                # Usa la prima emozione disponibile
+                fallback_tag = list(emotions_data.keys())[0] if emotions_data else None
+                if fallback_tag is None:
+                    raise ValueError("Nessuna emozione disponibile nella personalità")
+                tag = fallback_tag
+
+            emotion_data = emotions_data[tag]
+            ref_audio_path = str(
+                Path(personality_config["_base_dir"]) / emotion_data["file"]
+            )
+            ref_text = emotion_data["ref_text"]
+
+            # Genera segmento audio
+            wavs, sr = self.current_model.generate_voice_clone(
+                text=text,
+                language=language,
+                ref_audio=ref_audio_path,
+                ref_text=ref_text,
+            )
+
+            # Memorizza il primo sample rate
+            if sample_rate is None:
+                sample_rate = sr
+            elif sample_rate != sr:
+                # Resample se necessario (non dovrebbe accadere)
+                import librosa
+
+                wavs[0] = librosa.resample(wavs[0], orig_sr=sr, target_sr=sample_rate)
+
+            audio_chunks.append(wavs[0])
+
+        # Concatena tutti i chunk
+        if len(audio_chunks) == 0:
+            raise ValueError("Nessun audio generato")
+
+        concatenated = np.concatenate(audio_chunks, axis=0)
+
+        return [concatenated], sample_rate
+
     def _generate_clone(self, params):
+        """
+        Genera audio con clonazione vocale.
+        Supporta sia modalità manuale (ref_audio) che modalità personalità (personality_config).
+        """
+        # Check se stiamo usando una personalità
+        personality_config = params.get("personality_config")
+
+        if personality_config:
+            # Modalità Personalità: parsing e multi-segment
+            text = params["text"]
+            language = params.get("language", "Auto")
+
+            segments = self._parse_tagged_text(text)
+            return self._generate_multi_segment(segments, personality_config, language)
+
+        # Modalità Manuale: comportamento originale
         ref_audio_path = params["ref_audio"]
 
         # Pre-process audio: slice and normalize

@@ -17,6 +17,7 @@ from flask_cors import CORS
 from pathlib import Path
 
 from model_manager import ModelManager
+from personality_manager import PersonalityManager
 
 app = Flask(__name__, static_folder="../frontend")
 CORS(app)
@@ -24,6 +25,10 @@ CORS(app)
 manager = ModelManager()
 OUTPUT_DIR = Path(__file__).parent.parent / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
+
+PERSONALITIES_DIR = Path(__file__).parent.parent / "saved_personalities"
+PERSONALITIES_DIR.mkdir(exist_ok=True)
+personality_manager = PersonalityManager(PERSONALITIES_DIR)
 
 
 @app.route("/")
@@ -61,7 +66,9 @@ def switch_model():
             }
         )
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
 
 
 @app.route("/api/generate_stream", methods=["POST"])
@@ -104,6 +111,29 @@ def generate_stream():
 
                 time.sleep(0.5)
 
+                # Se c'è un personality_name, carica la config
+                personality_name = data.get("personality_name")
+                if personality_name:
+                    progress_state["stage"] = (
+                        f"Caricamento personalità '{personality_name}'..."
+                    )
+                    personality_config = personality_manager.get_details(
+                        personality_name
+                    )
+                    if personality_config is None:
+                        raise ValueError(
+                            f"Personalità '{personality_name}' non trovata"
+                        )
+
+                    # Aggiungi il base_dir alla config per trovare i file audio
+                    personality_config["_base_dir"] = str(
+                        PERSONALITIES_DIR
+                        / personality_manager._sanitize_name(personality_name)
+                    )
+
+                    # Aggiungi config ai params
+                    data["personality_config"] = personality_config
+
                 # Fase 2: Tokenizzazione (20%)
                 progress_state["progress"] = 20
                 progress_state["stage"] = "Tokenizzazione in corso..."
@@ -112,7 +142,12 @@ def generate_stream():
 
                 # Fase 3: Generazione (25-70% con aggiornamenti progressivi)
                 progress_state["progress"] = 25
-                progress_state["stage"] = "Generazione audio (inferenza GPU)..."
+                if personality_name:
+                    progress_state["stage"] = (
+                        f"Generazione multi-segmento (personalità: {personality_name})..."
+                    )
+                else:
+                    progress_state["stage"] = "Generazione audio (inferenza GPU)..."
                 progress_state["eta"] = int(estimated_seconds * 0.75)
 
                 # Avvia generazione effettiva
@@ -301,6 +336,108 @@ def transcribe_audio():
     try:
         text = manager.transcribe(str(file_path), start, end)
         return jsonify({"text": text})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/personality/create", methods=["POST"])
+def create_personality():
+    """Crea una nuova personalità vocale"""
+    try:
+        # Ottieni dati dal form multipart
+        name = request.form.get("name")
+        if not name:
+            return jsonify({"error": "Nome personalità mancante"}), 400
+
+        # Ottieni dati emozioni dal JSON
+        emotions_json = request.form.get("emotions")
+        if not emotions_json:
+            return jsonify({"error": "Dati emozioni mancanti"}), 400
+
+        emotions = json.loads(emotions_json)
+
+        # Valida che ci sia almeno un'emozione
+        if not emotions or len(emotions) == 0:
+            return jsonify({"error": "Almeno un'emozione è richiesta"}), 400
+
+        # Salva i file audio temporaneamente
+        audio_files = {}
+        for emotion in emotions:
+            tag = emotion["tag"]
+            if not tag:
+                return jsonify({"error": "Tag emozione mancante"}), 400
+
+            # Cerca il file con il nome corretto
+            file_key = f"audio_{tag}"
+            if file_key not in request.files:
+                return (
+                    jsonify({"error": f"File audio mancante per tag '{tag}'"}),
+                    400,
+                )
+
+            audio_file = request.files[file_key]
+            if audio_file.filename == "":
+                return (
+                    jsonify({"error": f"File audio vuoto per tag '{tag}'"}),
+                    400,
+                )
+
+            # Salva temporaneamente
+            temp_filename = f"{uuid.uuid4().hex}_{tag}.wav"
+            temp_path = OUTPUT_DIR / temp_filename
+            audio_file.save(str(temp_path))
+            audio_files[tag] = temp_path
+
+        # Crea la personalità
+        config = personality_manager.create(name, emotions, audio_files)
+
+        # Pulizia file temporanei
+        for temp_path in audio_files.values():
+            try:
+                temp_path.unlink()
+            except:
+                pass
+
+        return jsonify({"success": True, "personality": config})
+
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"Errore creazione personalità: {str(e)}"}), 500
+
+
+@app.route("/api/personality/list", methods=["GET"])
+def list_personalities():
+    """Ritorna lista di tutte le personalità salvate"""
+    try:
+        personalities = personality_manager.list_all()
+        return jsonify({"personalities": personalities})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/personality/<name>", methods=["GET"])
+def get_personality_details(name):
+    """Ritorna dettagli completi di una personalità"""
+    try:
+        details = personality_manager.get_details(name)
+        if details is None:
+            return jsonify({"error": "Personalità non trovata"}), 404
+
+        return jsonify(details)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/personality/<name>", methods=["DELETE"])
+def delete_personality(name):
+    """Elimina una personalità"""
+    try:
+        success = personality_manager.delete(name)
+        if not success:
+            return jsonify({"error": "Personalità non trovata"}), 404
+
+        return jsonify({"success": True, "message": f"Personalità '{name}' eliminata"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

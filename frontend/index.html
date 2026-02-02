@@ -11,200 +11,291 @@
 </head>
 
 <body>
-    <!-- Overlay Caricamento -->
-    <div id="loading-overlay" class="hidden">
-        <div class="loading-content">
-            <div class="spinner"></div>
-            <p id="loading-text">Caricamento modello in GPU...</p>
-            <div id="progress-container" class="hidden">
-                <div class="progress-bar">
-                    <div id="progress-fill" class="progress-fill"></div>
-                </div>
-                <div class="progress-info">
-                    <span id="progress-percent">0%</span>
-                    <span id="progress-eta">Tempo stimato: --</span>
-                </div>
+    <!-- Homepage -->
+    <div id="homepage">
+        <div class="hero-section">
+            <h1>🎙️ QwenTTS</h1>
+            <p class="subtitle">All-in-One Voice Synthesis Studio</p>
+            <p class="description">
+                Tecnologia TTS avanzata con clonazione vocale, voci preset emotive e voice design AI.
+                Ottimizzato per RTX 2070 con lazy loading intelligente.
+            </p>
+        </div>
+
+        <div class="model-cards">
+            <div class="model-card" data-model="base">
+                <div class="icon">🎤</div>
+                <h3>Clonazione Vocale</h3>
+                <p>Clona qualsiasi voce da un audio di riferimento e falla parlare con il tuo testo</p>
+            </div>
+
+            <div class="model-card" data-model="custom">
+                <div class="icon">🗣️</div>
+                <h3>Voci Preset</h3>
+                <p>Speaker predefiniti con controllo emotivo avanzato tramite istruzioni testuali</p>
+            </div>
+
+            <div class="model-card" data-model="design">
+                <div class="icon">✨</div>
+                <h3>Voice Design</h3>
+                <p>Crea voci uniche descrivendo le caratteristiche vocali desiderate</p>
             </div>
         </div>
     </div>
 
-    <div class="container">
-        <header>
-            <h1>🎙️ QwenTTS All-in-One</h1>
-            <p class="subtitle">Text-to-Speech con Lazy Loading per RTX 2070</p>
-            <div id="status-bar">
-                <span id="model-status">Nessun modello caricato</span>
-                <span id="vram-status">VRAM: --</span>
-            </div>
-        </header>
-
-        <!-- Tab Navigation -->
-        <nav class="tabs">
-            <button class="tab-btn" data-model="base">🎤 Clonazione</button>
-            <button class="tab-btn" data-model="custom">🗣️ Voci Preset</button>
-            <button class="tab-btn" data-model="design">✨ Voice Design</button>
-        </nav>
-
-        <!-- Tab Panels -->
-        <main class="tab-content">
-            <!-- Panel Base (Voice Clone) -->
-            <section id="panel-base" class="panel hidden">
-                <h2>Clonazione Vocale</h2>
-                <p>Clona una voce da un audio di riferimento</p>
-
-                <div class="form-group">
-                    <label>Audio di Riferimento (Clonazione):</label>
-                    <input type="file" id="ref-audio" accept="audio/*">
-                    <div id="waveform" style="margin-top: 10px; border: 1px solid #333; border-radius: 4px;"></div>
-                    <div class="controls" style="margin-top: 5px; display: flex; gap: 10px;">
-                        <button class="secondary-btn" id="extract-text-btn" disabled>Estrai Testo dal Segmento</button>
-                        <span id="region-info" style="font-size: 0.9em; color: #888; align-self: center;"></span>
+    <!-- Main App (Initially Hidden) -->
+    <div id="main-app" class="hidden">
+        <!-- Overlay Caricamento -->
+        <div id="loading-overlay" class="hidden">
+            <div class="loading-content">
+                <div class="spinner"></div>
+                <p id="loading-text">Caricamento modello in GPU...</p>
+                <div id="progress-container" class="hidden">
+                    <div class="progress-bar">
+                        <div id="progress-fill" class="progress-fill"></div>
+                    </div>
+                    <div class="progress-info">
+                        <span id="progress-percent">0%</span>
+                        <span id="progress-eta">Tempo stimato: --</span>
                     </div>
                 </div>
+            </div>
+        </div>
 
-                <div class="form-group">
-                    <label>Testo di riferimento (dall'audio):</label>
-                    <textarea id="ref-text" rows="2"
-                        placeholder="Il testo che viene pronunciato nell'audio di riferimento..."></textarea>
+        <div class="container">
+            <header>
+                <h1>🎙️ QwenTTS All-in-One</h1>
+                <p class="subtitle">Text-to-Speech con Lazy Loading per RTX 2070</p>
+                <div id="status-bar">
+                    <span id="model-status">Nessun modello caricato</span>
+                    <span id="vram-status">VRAM: --</span>
+                    <button id="personality-builder-btn" class="personality-builder-btn">🎭 Crea Personalità</button>
                 </div>
+            </header>
 
-                <div class="form-group">
-                    <label for="target-text-base">Testo da Sintetizzare</label>
-                    <textarea id="target-text-base"
-                        placeholder="Inserisci il testo che vuoi far pronunciare..."></textarea>
-                </div>
+            <!-- Tab Navigation -->
+            <nav class="tabs">
+                <button class="tab-btn" data-model="base">🎤 Clonazione</button>
+                <button class="tab-btn" data-model="custom">🗣️ Voci Preset</button>
+                <button class="tab-btn" data-model="design">✨ Voice Design</button>
+            </nav>
 
-                <div class="form-group">
-                    <label for="lang-base">Lingua</label>
-                    <select id="lang-base">
-                        <option value="Auto">Auto</option>
-                        <option value="Chinese">Cinese</option>
-                        <option value="English">Inglese</option>
-                        <option value="Italian">Italiano</option>
-                        <option value="Japanese">Giapponese</option>
-                        <option value="Korean">Coreano</option>
-                        <option value="German">Tedesco</option>
-                        <option value="French">Francese</option>
-                        <option value="Spanish">Spagnolo</option>
-                        <option value="Portuguese">Portoghese</option>
-                        <option value="Russian">Russo</option>
-                    </select>
-                </div>
+            <!-- Tab Panels -->
+            <main class="tab-content">
+                <!-- Panel Base (Voice Clone) -->
+                <section id="panel-base" class="panel hidden">
+                    <h2>Clonazione Vocale</h2>
+                    <p>Clona una voce da un audio di riferimento</p>
 
-                <div class="form-group">
-                    <label for="format-base">Formato Audio</label>
-                    <select id="format-base">
-                        <option value="wav">WAV (Lossless)</option>
-                        <option value="mp3">MP3 (Compresso)</option>
-                    </select>
-                </div>
+                    <!-- Mode Selector -->
+                    <div class="form-group">
+                        <label>Modalità</label>
+                        <div class="mode-toggle">
+                            <button class="mode-btn active" data-mode="manual">📁 Modalità Manuale</button>
+                            <button class="mode-btn" data-mode="personality">🎭 Usa Personalità</button>
+                        </div>
+                    </div>
 
-                <button class="generate-btn" onclick="generateBase()">🎵 Genera Audio</button>
+                    <!-- Personality Selector (Hidden in manual mode) -->
+                    <div class="form-group personality-select-group hidden">
+                        <label for="personality-select">Seleziona Personalità</label>
+                        <select id="personality-select">
+                            <option value="">-- Seleziona una personalità --</option>
+                        </select>
+                    </div>
+
+                    <!-- Tag Toolbar (Hidden until personality selected) -->
+                    <div class="tag-toolbar-container hidden">
+                        <label>Tag Disponibili (click per inserire)</label>
+                        <div id="tag-toolbar" class="tag-toolbar"></div>
+                    </div>
+
+                    <!-- Manual Mode: Audio Upload (Visible in manual mode) -->
+                    <div class="manual-mode-group">
+                        <div class="form-group">
+                            <label>Audio di Riferimento (Clonazione):</label>
+                            <input type="file" id="ref-audio" accept="audio/*">
+                            <div id="waveform" style="margin-top: 10px; border: 1px solid #333; border-radius: 4px;">
+                            </div>
+                            <div class="controls" style="margin-top: 5px; display: flex; gap: 10px;">
+                                <button class="secondary-btn" id="extract-text-btn" disabled>Estrai Testo dal
+                                    Segmento</button>
+                                <span id="region-info"
+                                    style="font-size: 0.9em; color: #888; align-self: center;"></span>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Testo di riferimento (dall'audio):</label>
+                            <textarea id="ref-text" rows="2"
+                                placeholder="Il testo che viene pronunciato nell'audio di riferimento..."></textarea>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="target-text-base">Testo da Sintetizzare</label>
+                        <textarea id="target-text-base"
+                            placeholder="Inserisci il testo che vuoi far pronunciare..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="lang-base">Lingua</label>
+                        <select id="lang-base">
+                            <option value="Auto">Auto</option>
+                            <option value="Chinese">Cinese</option>
+                            <option value="English">Inglese</option>
+                            <option value="Italian">Italiano</option>
+                            <option value="Japanese">Giapponese</option>
+                            <option value="Korean">Coreano</option>
+                            <option value="German">Tedesco</option>
+                            <option value="French">Francese</option>
+                            <option value="Spanish">Spagnolo</option>
+                            <option value="Portuguese">Portoghese</option>
+                            <option value="Russian">Russo</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="format-base">Formato Audio</label>
+                        <select id="format-base">
+                            <option value="wav">WAV (Lossless)</option>
+                            <option value="mp3">MP3 (Compresso)</option>
+                        </select>
+                    </div>
+
+                    <button class="generate-btn" onclick="generateBase()">🎵 Genera Audio</button>
+                </section>
+
+                <!-- Panel Custom Voice -->
+                <section id="panel-custom" class="panel hidden">
+                    <h2>Voci Preset</h2>
+                    <p>Usa speaker predefiniti con controllo emotivo</p>
+
+                    <div class="form-group">
+                        <label for="speaker-select">Speaker</label>
+                        <select id="speaker-select"></select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="target-text-custom">Testo da Sintetizzare</label>
+                        <textarea id="target-text-custom" placeholder="Inserisci il testo..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="instruct-custom">Istruzioni Emozione (opzionale)</label>
+                        <input type="text" id="instruct-custom" placeholder="Es: Parla con tono allegro e vivace">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="lang-custom">Lingua</label>
+                        <select id="lang-custom">
+                            <option value="Auto">Auto</option>
+                            <option value="Chinese">Cinese</option>
+                            <option value="English">Inglese</option>
+                            <option value="Italian">Italiano</option>
+                            <option value="Japanese">Giapponese</option>
+                            <option value="Korean">Coreano</option>
+                            <option value="German">Tedesco</option>
+                            <option value="French">Francese</option>
+                            <option value="Spanish">Spagnolo</option>
+                            <option value="Portuguese">Portoghese</option>
+                            <option value="Russian">Russo</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="format-custom">Formato Audio</label>
+                        <select id="format-custom">
+                            <option value="wav">WAV (Lossless)</option>
+                            <option value="mp3">MP3 (Compresso)</option>
+                        </select>
+                    </div>
+
+                    <button class="generate-btn" onclick="generateCustom()">🎵 Genera Audio</button>
+                </section>
+
+                <!-- Panel Voice Design -->
+                <section id="panel-design" class="panel hidden">
+                    <h2>Voice Design</h2>
+                    <p>Crea una voce descrivendo le sue caratteristiche</p>
+
+                    <div class="form-group">
+                        <label for="voice-description">Descrizione Voce</label>
+                        <textarea id="voice-description" rows="4"
+                            placeholder="Es: Voce femminile giovane, tono vivace e allegro, leggera cadenza italiana..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="target-text-design">Testo da Sintetizzare</label>
+                        <textarea id="target-text-design" placeholder="Inserisci il testo..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="lang-design">Lingua</label>
+                        <select id="lang-design">
+                            <option value="Auto">Auto</option>
+                            <option value="Chinese">Cinese</option>
+                            <option value="English">Inglese</option>
+                            <option value="Italian">Italiano</option>
+                            <option value="Japanese">Giapponese</option>
+                            <option value="Korean">Coreano</option>
+                            <option value="German">Tedesco</option>
+                            <option value="French">Francese</option>
+                            <option value="Spanish">Spagnolo</option>
+                            <option value="Portuguese">Portoghese</option>
+                            <option value="Russian">Russo</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="format-design">Formato Audio</label>
+                        <select id="format-design">
+                            <option value="wav">WAV (Lossless)</option>
+                            <option value="mp3">MP3 (Compresso)</option>
+                        </select>
+                    </div>
+
+                    <button class="generate-btn" onclick="generateDesign()">🎵 Genera Audio</button>
+                </section>
+            </main>
+
+            <!-- Audio Output -->
+            <section class="output-section">
+                <h3>🔊 Audio Generato</h3>
+                <audio id="output-audio" controls class="hidden"></audio>
+                <a id="download-link" class="download-btn hidden" download>
+                    ⬇️ Scarica Audio
+                </a>
+                <p id="output-placeholder">L'audio generato apparirà qui</p>
             </section>
 
-            <!-- Panel Custom Voice -->
-            <section id="panel-custom" class="panel hidden">
-                <h2>Voci Preset</h2>
-                <p>Usa speaker predefiniti con controllo emotivo</p>
+            <!-- Personality Builder Modal -->
+            <div id="personality-builder-modal" class="modal hidden">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>🎭 Crea Personalità Vocale</h2>
+                        <button class="modal-close" id="close-builder-btn">&times;</button>
+                    </div>
 
-                <div class="form-group">
-                    <label for="speaker-select">Speaker</label>
-                    <select id="speaker-select"></select>
+                    <div class="form-group">
+                        <label for="personality-name-input">Nome Personalità</label>
+                        <input type="text" id="personality-name-input" placeholder="es. Narratore_Horror" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Emozioni</label>
+                        <div id="emotion-rows-container"></div>
+                        <button class="secondary-btn" id="add-emotion-btn">+ Aggiungi Emozione</button>
+                    </div>
+
+                    <div class="modal-actions">
+                        <button class="generate-btn" id="save-personality-btn">💾 Salva Personalità</button>
+                    </div>
                 </div>
-
-                <div class="form-group">
-                    <label for="target-text-custom">Testo da Sintetizzare</label>
-                    <textarea id="target-text-custom" placeholder="Inserisci il testo..."></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label for="instruct-custom">Istruzioni Emozione (opzionale)</label>
-                    <input type="text" id="instruct-custom" placeholder="Es: Parla con tono allegro e vivace">
-                </div>
-
-                <div class="form-group">
-                    <label for="lang-custom">Lingua</label>
-                    <select id="lang-custom">
-                        <option value="Auto">Auto</option>
-                        <option value="Chinese">Cinese</option>
-                        <option value="English">Inglese</option>
-                        <option value="Italian">Italiano</option>
-                        <option value="Japanese">Giapponese</option>
-                        <option value="Korean">Coreano</option>
-                        <option value="German">Tedesco</option>
-                        <option value="French">Francese</option>
-                        <option value="Spanish">Spagnolo</option>
-                        <option value="Portuguese">Portoghese</option>
-                        <option value="Russian">Russo</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="format-custom">Formato Audio</label>
-                    <select id="format-custom">
-                        <option value="wav">WAV (Lossless)</option>
-                        <option value="mp3">MP3 (Compresso)</option>
-                    </select>
-                </div>
-
-                <button class="generate-btn" onclick="generateCustom()">🎵 Genera Audio</button>
-            </section>
-
-            <!-- Panel Voice Design -->
-            <section id="panel-design" class="panel hidden">
-                <h2>Voice Design</h2>
-                <p>Crea una voce descrivendo le sue caratteristiche</p>
-
-                <div class="form-group">
-                    <label for="voice-description">Descrizione Voce</label>
-                    <textarea id="voice-description" rows="4"
-                        placeholder="Es: Voce femminile giovane, tono vivace e allegro, leggera cadenza italiana..."></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label for="target-text-design">Testo da Sintetizzare</label>
-                    <textarea id="target-text-design" placeholder="Inserisci il testo..."></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label for="lang-design">Lingua</label>
-                    <select id="lang-design">
-                        <option value="Auto">Auto</option>
-                        <option value="Chinese">Cinese</option>
-                        <option value="English">Inglese</option>
-                        <option value="Italian">Italiano</option>
-                        <option value="Japanese">Giapponese</option>
-                        <option value="Korean">Coreano</option>
-                        <option value="German">Tedesco</option>
-                        <option value="French">Francese</option>
-                        <option value="Spanish">Spagnolo</option>
-                        <option value="Portuguese">Portoghese</option>
-                        <option value="Russian">Russo</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="format-design">Formato Audio</label>
-                    <select id="format-design">
-                        <option value="wav">WAV (Lossless)</option>
-                        <option value="mp3">MP3 (Compresso)</option>
-                    </select>
-                </div>
-
-                <button class="generate-btn" onclick="generateDesign()">🎵 Genera Audio</button>
-            </section>
-        </main>
-
-        <!-- Audio Output -->
-        <section class="output-section">
-            <h3>🔊 Audio Generato</h3>
-            <audio id="output-audio" controls class="hidden"></audio>
-            <a id="download-link" class="download-btn hidden" download>
-                ⬇️ Scarica Audio
-            </a>
-            <p id="output-placeholder">L'audio generato apparirà qui</p>
-        </section>
+            </div>
+        </div>
     </div>
+    </div> <!-- Close main-app -->
 
     <script src="script.js"></script>
 </body>

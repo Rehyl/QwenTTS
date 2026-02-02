@@ -40,6 +40,7 @@ venv.bak
 models/
 output/
 temp_audio/
+saved_personalities/
 
 # OS
 .DS_Store

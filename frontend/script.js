@@ -4,15 +4,102 @@ let currentCloudFilename = null;
 let currentCloudPath = null;
 let wavesurfer = null;
 let wsRegions = null;
+let emotionRowCounter = 0;
+let currentMode = 'manual'; // 'manual' or 'personality'
+let selectedPersonality = null;
 
 // Inizializzazione
 document.addEventListener('DOMContentLoaded', async () => {
+    setupHomepage();
     await loadStatus();
     await loadSpeakers();
+    await loadPersonalities();
     setupTabs();
     setupFileUpload();
+    setupPersonalityBuilder();
+    setupModeToggle();
 
     document.getElementById('extract-text-btn').addEventListener('click', extractText);
+});
+
+// === Homepage Setup ===
+function setupHomepage() {
+    const modelCards = document.querySelectorAll('.model-card');
+    const homepage = document.getElementById('homepage');
+    const mainApp = document.getElementById('main-app');
+
+    modelCards.forEach(card => {
+        card.addEventListener('click', async () => {
+            const modelType = card.dataset.model;
+
+            // Animate homepage out
+            homepage.style.animation = 'fadeOut 0.4s ease forwards';
+
+            // Wait for animation
+            await new Promise(resolve => setTimeout(resolve, 400));
+            homepage.classList.add('hidden');
+
+            // Show main app and load model
+            mainApp.classList.remove('hidden');
+            mainApp.style.animation = 'fadeIn 0.5s ease forwards';
+
+            // Switch to selected model
+            await switchTab(modelType);
+        });
+    });
+}
+
+// Add fadeOut animation
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes fadeOut {
+        from { opacity: 1; transform: scale(1); }
+        to { opacity: 0; transform: scale(0.95); }
+    }
+    @keyframes ripple {
+        from {
+            transform: scale(0);
+            opacity: 0.6;
+        }
+        to {
+            transform: scale(4);
+            opacity: 0;
+        }
+    }
+`;
+document.head.appendChild(style);
+
+// === Button Ripple Effect ===
+function createRipple(event) {
+    const button = event.currentTarget;
+    const ripple = document.createElement('span');
+    const rect = button.getBoundingClientRect();
+
+    const size = Math.max(rect.width, rect.height);
+    const x = event.clientX - rect.left - size / 2;
+    const y = event.clientY - rect.top - size / 2;
+
+    ripple.style.width = ripple.style.height = `${size}px`;
+    ripple.style.left = `${x}px`;
+    ripple.style.top = `${y}px`;
+    ripple.style.position = 'absolute';
+    ripple.style.borderRadius = '50%';
+    ripple.style.background = 'rgba(255, 255, 255, 0.5)';
+    ripple.style.pointerEvents = 'none';
+    ripple.style.animation = 'ripple 0.6s ease-out';
+
+    button.style.position = 'relative';
+    button.style.overflow = 'hidden';
+    button.appendChild(ripple);
+
+    ripple.addEventListener('animationend', () => ripple.remove());
+}
+
+// Add ripple to all buttons
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', createRipple);
+    });
 });
 
 // Carica stato iniziale
@@ -82,9 +169,24 @@ async function switchTab(modelType) {
         btn.classList.toggle('active', btn.dataset.model === modelType);
     });
 
-    // Mostra panel corretto
-    document.querySelectorAll('.panel').forEach(p => p.classList.add('hidden'));
-    document.getElementById(`panel-${modelType}`).classList.remove('hidden');
+    // Mostra panel corretto con animazione
+    const allPanels = document.querySelectorAll('.panel');
+    const targetPanel = document.getElementById(`panel-${modelType}`);
+
+    // Fade out current panel
+    allPanels.forEach(p => {
+        if (!p.classList.contains('hidden')) {
+            p.style.animation = 'fadeOut 0.2s ease forwards';
+        }
+    });
+
+    // Wait for fade out
+    await new Promise(resolve => setTimeout(resolve, 200));
+    allPanels.forEach(p => p.classList.add('hidden'));
+
+    // Fade in target panel
+    targetPanel.classList.remove('hidden');
+    targetPanel.style.animation = 'slideUp 0.4s ease forwards';
 }
 
 // Setup upload file audio e WaveSurfer
@@ -222,36 +324,58 @@ async function extractText() {
 // Generazione Base (Clone)
 async function generateBase() {
     const text = document.getElementById('target-text-base').value.trim();
-    const refText = document.getElementById('ref-text').value.trim();
     const language = document.getElementById('lang-base').value;
     const format = document.getElementById('format-base').value;
 
-    if (!text || !refText || !currentCloudPath) {
-        alert('Compila tutti i campi e carica un audio di riferimento');
+    if (!text) {
+        alert('Inserisci il testo da sintetizzare');
         return;
     }
 
-    // Get region if available
-    let start = null;
-    let end = null;
-    if (wsRegions) {
-        const regions = wsRegions.getRegions();
-        if (regions.length > 0) {
-            start = regions[0].start;
-            end = regions[0].end;
-        }
-    }
-
-    await generate({
+    const params = {
         expected_model: 'base',
         text,
-        ref_text: refText,
-        ref_audio: currentCloudPath, // Use server path
-        start_time: start,
-        end_time: end,
         language,
         format
-    });
+    };
+
+    // Check mode
+    if (currentMode === 'personality') {
+        // Personality mode
+        const personalityName = document.getElementById('personality-select').value;
+        if (!personalityName) {
+            alert('Seleziona una personalità');
+            return;
+        }
+
+        params.personality_name = personalityName;
+    } else {
+        // Manual mode
+        const refText = document.getElementById('ref-text').value.trim();
+
+        if (!refText || !currentCloudPath) {
+            alert('Compila tutti i campi e carica un audio di riferimento');
+            return;
+        }
+
+        // Get region if available
+        let start = null;
+        let end = null;
+        if (wsRegions) {
+            const regions = wsRegions.getRegions();
+            if (regions.length > 0) {
+                start = regions[0].start;
+                end = regions[0].end;
+            }
+        }
+
+        params.ref_text = refText;
+        params.ref_audio = currentCloudPath;
+        params.start_time = start;
+        params.end_time = end;
+    }
+
+    await generate(params);
 }
 
 // Generazione Custom Voice
@@ -401,6 +525,238 @@ function disableButtons(disabled) {
     document.querySelectorAll('.generate-btn').forEach(btn => {
         btn.disabled = disabled;
     });
+}
+
+// Load personalities from backend
+async function loadPersonalities() {
+    try {
+        const res = await fetch(`${API_BASE}/api/personality/list`);
+        const data = await res.json();
+
+        const select = document.getElementById('personality-select');
+        select.innerHTML = '<option value="">-- Seleziona una personalità --</option>';
+
+        if (data.personalities && data.personalities.length > 0) {
+            data.personalities.forEach(p => {
+                const option = document.createElement('option');
+                option.value = p.name;
+                option.textContent = `${p.original_name || p.name} (${p.emotion_count} emozioni)`;
+                select.appendChild(option);
+            });
+        }
+    } catch (e) {
+        console.error('Errore caricamento personalità:', e);
+    }
+}
+
+// Setup personality builder modal
+function setupPersonalityBuilder() {
+    const modal = document.getElementById('personality-builder-modal');
+    const openBtn = document.getElementById('personality-builder-btn');
+    const closeBtn = document.getElementById('close-builder-btn');
+    const addEmotionBtn = document.getElementById('add-emotion-btn');
+    const saveBtn = document.getElementById('save-personality-btn');
+
+    openBtn.addEventListener('click', () => {
+        modal.classList.remove('hidden');
+        // Add one emotion row by default
+        document.getElementById('emotion-rows-container').innerHTML = '';
+        emotionRowCounter = 0;
+        addEmotionRow();
+    });
+
+    closeBtn.addEventListener('click', () => {
+        modal.classList.add('hidden');
+    });
+
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.classList.add('hidden');
+        }
+    });
+
+    addEmotionBtn.addEventListener('click', addEmotionRow);
+    saveBtn.addEventListener('click', savePersonality);
+}
+
+// Add emotion row
+function addEmotionRow() {
+    const container = document.getElementById('emotion-rows-container');
+    const index = emotionRowCounter++;
+
+    const row = document.createElement('div');
+    row.className = 'emotion-row';
+    row.dataset.index = index;
+
+    row.innerHTML = `
+        <div class="emotion-row-header">
+            <span class="emotion-row-title">Emozione #${index + 1}</span>
+            <button class="emotion-remove-btn" data-index="${index}">&times;</button>
+        </div>
+        <div class="emotion-row-fields">
+            <input type="text" class="emotion-tag" placeholder="Tag (es. neutro)" required />
+            <input type="file" class="emotion-audio" accept="audio/*" required />
+            <textarea class="emotion-ref-text full-width" rows="2" placeholder="Testo di riferimento..." required></textarea>
+        </div>
+    `;
+
+    container.appendChild(row);
+
+    // Add remove listener
+    row.querySelector('.emotion-remove-btn').addEventListener('click', () => {
+        row.remove();
+    });
+}
+
+// Save personality
+async function savePersonality() {
+    const name = document.getElementById('personality-name-input').value.trim();
+    if (!name) {
+        alert('Inserisci un nome per la personalità');
+        return;
+    }
+
+    const emotionRows = document.querySelectorAll('.emotion-row');
+    if (emotionRows.length === 0) {
+        alert('Aggiungi almeno un\'emozione');
+        return;
+    }
+
+    // Build emotions array and FormData
+    const formData = new FormData();
+    formData.append('name', name);
+
+    const emotions = [];
+    let hasErrors = false;
+
+    emotionRows.forEach((row, idx) => {
+        const tag = row.querySelector('.emotion-tag').value.trim();
+        const audioFile = row.querySelector('.emotion-audio').files[0];
+        const refText = row.querySelector('.emotion-ref-text').value.trim();
+
+        if (!tag || !audioFile || !refText) {
+            alert(`Compila tutti i campi per l'Emozione #${idx + 1}`);
+            hasErrors = true;
+            return;
+        }
+
+        emotions.push({ tag, ref_text: refText });
+        formData.append(`audio_${tag}`, audioFile);
+    });
+
+    if (hasErrors) return;
+
+    formData.append('emotions', JSON.stringify(emotions));
+
+    // Send to backend
+    showLoading('Creazione personalità in corso...', false);
+    try {
+        const res = await fetch(`${API_BASE}/api/personality/create`, {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+            alert(`Personalità "${name}" creata con successo!`);
+            document.getElementById('personality-builder-modal').classList.add('hidden');
+            await loadPersonalities();
+        } else {
+            alert('Errore: ' + (data.error || 'Errore sconosciuto'));
+        }
+    } catch (e) {
+        alert('Errore creazione personalità: ' + e.message);
+    } finally {
+        hideLoading();
+    }
+}
+
+// Setup mode toggle
+function setupModeToggle() {
+    const modeBtns = document.querySelectorAll('.mode-btn');
+    const manualGroup = document.querySelector('.manual-mode-group');
+    const personalityGroup = document.querySelector('.personality-select-group');
+    const personalitySelect = document.getElementById('personality-select');
+
+    modeBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const mode = btn.dataset.mode;
+
+            // Update buttons
+            modeBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            // Update mode
+            currentMode = mode;
+
+            // Toggle visibility
+            if (mode === 'manual') {
+                manualGroup.classList.remove('hidden');
+                personalityGroup.classList.add('hidden');
+                document.querySelector('.tag-toolbar-container').classList.add('hidden');
+            } else {
+                manualGroup.classList.add('hidden');
+                personalityGroup.classList.remove('hidden');
+            }
+        });
+    });
+
+    // Personality select change
+    personalitySelect.addEventListener('change', async (e) => {
+        const personalityName = e.target.value;
+
+        if (!personalityName) {
+            document.querySelector('.tag-toolbar-container').classList.add('hidden');
+            selectedPersonality = null;
+            return;
+        }
+
+        // Load personality details
+        try {
+            const res = await fetch(`${API_BASE}/api/personality/${personalityName}`);
+            const personality = await res.json();
+
+            if (personality.error) {
+                alert('Errore caricamento personalità: ' + personality.error);
+                return;
+            }
+
+            selectedPersonality = personality;
+
+            // Build tag toolbar
+            const toolbar = document.getElementById('tag-toolbar');
+            toolbar.innerHTML = '';
+
+            Object.keys(personality.emotions).forEach(tag => {
+                const btn = document.createElement('button');
+                btn.className = 'tag-btn';
+                btn.textContent = `[${tag}]`;
+                btn.addEventListener('click', () => insertTag(tag));
+                toolbar.appendChild(btn);
+            });
+
+            document.querySelector('.tag-toolbar-container').classList.remove('hidden');
+        } catch (e) {
+            alert('Errore caricamento personalità: ' + e.message);
+        }
+    });
+}
+
+// Insert tag at cursor position
+function insertTag(tag) {
+    const textarea = document.getElementById('target-text-base');
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+
+    const tagText = `[${tag}] `;
+    const newText = text.substring(0, start) + tagText + text.substring(end);
+
+    textarea.value = newText;
+    textarea.focus();
+    textarea.setSelectionRange(start + tagText.length, start + tagText.length);
 }
 
 function updateStatusBar(status) {
