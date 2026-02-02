@@ -29,10 +29,16 @@ Applicazione web per Text-to-Speech con **Qwen3-TTS**, ottimizzata per **RTX 207
 | **GPU** | NVIDIA RTX 2070 (8GB VRAM) |
 | **RAM** | 32GB (consigliato) |
 | **Disco** | ~15GB per i 3 modelli 1.7B |
+| **Software** | **FFmpeg** (necessario per MP3) |
 
 ---
 
 ## 🚀 Installazione
+
+### 0. Prerequisiti
+1. Installare [Python 3.10+](https://www.python.org/)
+2. Installare [FFmpeg](https://ffmpeg.org/download.html) e aggiungerlo al PATH di sistema (necessario per elaborazione audio e MP3).
+3. Installare driver NVIDIA aggiornati e [CUDA Toolkit 12.x](https://developer.nvidia.com/cuda-toolkit).
 
 ### 1. Crea Ambiente Virtuale
 
@@ -110,10 +116,12 @@ Poi apri il browser su: **http://localhost:5000**
 
 ### 1. Voice Clone (Base)
 1. Clicca sul tab **🎤 Clonazione**
-2. Carica un file audio di riferimento
-3. Trascrivi l'audio caricato
-4. Inserisci il testo da sintetizzare
-5. Premi **Genera Audio**
+2. Carica un file audio di riferimento (WAV/MP3)
+3. Usa la **Waveform interattiva** per selezionare il segmento da clonare
+4. Clicca **Estrai Testo dal Segmento** per trascrivere automaticamente con Whisper
+5. Modifica il testo di riferimento se necessario
+6. Inserisci il testo da sintetizzare
+7. Premi **Genera Audio** (segui il progresso nella barra di caricamento)
 
 ### 2. Custom Voice
 1. Clicca sul tab **🗣️ Voci Preset**
@@ -135,19 +143,19 @@ Poi apri il browser su: **http://localhost:5000**
 ```
 QwenTTS/
 ├── backend/
-│   ├── app.py              # Server Flask con API REST
-│   └── model_manager.py    # Gestione lazy loading modelli
+│   ├── app.py              # Server Flask con API REST e SSE
+│   └── model_manager.py    # Gestione lazy loading modelli e Whisper
 ├── frontend/
-│   ├── index.html          # Interfaccia web
+│   ├── index.html          # Interfaccia web con WaveSurfer.js
 │   ├── style.css           # Stili dark mode
 │   └── script.js           # Logica client-side
 ├── models/                 # Modelli scaricati (15GB)
 │   ├── base/
 │   ├── custom/
 │   └── design/
-├── output/                 # Audio generati
+├── output/                 # Audio generati e temporanei
 ├── requirements.txt        # Dipendenze Python
-└── start.bat              # Script avvio Windows
+└── start.bat               # Script avvio Windows
 ```
 
 ---
@@ -158,7 +166,9 @@ QwenTTS/
 |----------|--------|-------------|
 | `/api/status` | GET | Stato modello corrente e VRAM |
 | `/api/switch_model` | POST | Hot-swap del modello |
-| `/api/generate` | POST | Generazione audio TTS |
+| `/api/generate_stream` | POST | Generazione audio TTS con eventi SSE (progresso real-time) |
+| `/api/transcribe` | POST | Trascrizione audio con Whisper |
+| `/api/upload_temp` | POST | Upload audio temporaneo per elaborazione |
 | `/api/audio/<file>` | GET | Download audio generati |
 | `/api/speakers` | GET | Lista speaker CustomVoice |
 
