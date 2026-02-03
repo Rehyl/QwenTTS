@@ -99,9 +99,14 @@
                     <!-- Personality Selector (Hidden in manual mode) -->
                     <div class="form-group personality-select-group hidden">
                         <label for="personality-select">Seleziona Personalità</label>
-                        <select id="personality-select">
-                            <option value="">-- Seleziona una personalità --</option>
-                        </select>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <select id="personality-select" style="flex: 1;">
+                                <option value="">-- Seleziona una personalità --</option>
+                            </select>
+                            <button id="delete-personality-btn" class="danger-btn hidden" title="Elimina personalità">
+                                🗑️ Elimina
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Tag Toolbar (Hidden until personality selected) -->
@@ -161,6 +166,16 @@
                             <option value="wav">WAV (Lossless)</option>
                             <option value="mp3">MP3 (Compresso)</option>
                         </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="temperature-slider">
+                            Temperatura (Creatività) <span id="temp-value">0.7</span>
+                        </label>
+                        <input type="range" id="temperature-slider" min="0.1" max="1.0" step="0.1" value="0.7">
+                        <small class="help-text">
+                            Bassa (0.3) = Fedele al riferimento | Alta (0.9) = Più creativa e varia
+                        </small>
                     </div>
 
                     <button class="generate-btn" onclick="generateBase()">🎵 Genera Audio</button>
@@ -277,15 +292,77 @@
                         <button class="modal-close" id="close-builder-btn">&times;</button>
                     </div>
 
+                    <!-- Mode Toggle -->
+                    <div class="form-group">
+                        <label>Modalità Creazione</label>
+                        <div class="mode-toggle">
+                            <button class="mode-btn active" data-builder-mode="manual">📁 Manuale</button>
+                            <button class="mode-btn" data-builder-mode="smart">🧠 Smart (Auto-Emozioni)</button>
+                        </div>
+                    </div>
+
                     <div class="form-group">
                         <label for="personality-name-input">Nome Personalità</label>
                         <input type="text" id="personality-name-input" placeholder="es. Narratore_Horror" />
                     </div>
 
-                    <div class="form-group">
-                        <label>Emozioni</label>
-                        <div id="emotion-rows-container"></div>
-                        <button class="secondary-btn" id="add-emotion-btn">+ Aggiungi Emozione</button>
+                    <!-- Manual Mode Panel -->
+                    <div id="manual-builder-panel">
+                        <div class="form-group">
+                            <label>Emozioni</label>
+                            <div id="emotion-rows-container"></div>
+                            <button class="secondary-btn" id="add-emotion-btn">+ Aggiungi Emozione</button>
+                        </div>
+                    </div>
+
+                    <!-- Smart Mode Panel -->
+                    <div id="smart-builder-panel" class="hidden">
+                        <div class="form-group">
+                            <label for="voice-desc-input">Descrizione Voce</label>
+                            <textarea id="voice-desc-input" rows="3"
+                                placeholder="Es: Uomo italiano giovane, voce profonda e chiara"></textarea>
+                            <small class="help-text">
+                                Descrivi le caratteristiche base della voce (sesso, età, timbro)
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="smart-audio-input">Audio Neutro (3-15 secondi)</label>
+                            <input type="file" id="smart-audio-input" accept="audio/*">
+                            <small class="help-text">
+                                Carica un audio della tua voce con tono neutro e naturale
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Emozioni da Generare</label>
+                            <div id="emotion-checkboxes" class="checkbox-group">
+                                <label><input type="checkbox" value="rabbia" checked> 😠 Rabbia</label>
+                                <label><input type="checkbox" value="felicità" checked> 😊 Felicità</label>
+                                <label><input type="checkbox" value="tristezza" checked> 😢 Tristezza</label>
+                                <label><input type="checkbox" value="paura"> 😨 Paura</label>
+                                <label><input type="checkbox" value="sorpresa"> 😲 Sorpresa</label>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="crossfade-input">
+                                Crossfade (Sfumatura) <span id="crossfade-value">100ms</span>
+                            </label>
+                            <input type="range" id="crossfade-input" min="0" max="500" step="50" value="100">
+                            <small class="help-text">
+                                Regola la durata della transizione tra tua voce e AI. <br>
+                                <strong>Consigliato: 100ms</strong> | 0ms = nessuna sfumatura | 500ms = transizione
+                                molto graduale
+                            </small>
+                        </div>
+
+                        <div id="smart-progress" class="hidden">
+                            <div class="progress-bar">
+                                <div id="smart-progress-fill" class="progress-fill"></div>
+                            </div>
+                            <p id="smart-progress-stage" class="progress-stage">Generando...</p>
+                        </div>
                     </div>
 
                     <div class="modal-actions">

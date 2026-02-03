@@ -15,6 +15,7 @@ C:\PYTHONWS\PROGETTI\QWENTTS
 ├───backend                  # Logica Server Side (Python/Flask)
 │   │   app.py               # Entry point Flask, definisce le API REST
 │   │   model_manager.py     # Gestione singleton dei modelli AI, lazy loading, inferenza
+│   │   chimera_maker.py     # Gestione pipeline ibrida (Reference + TTS) e crossfading
 │   │   personality_manager.py # CRUD per le personalità vocali su file system
 │   │
 ├───docs                     # Documentazione tecnica
@@ -76,6 +77,15 @@ Il backend è un server Flask leggero che funge da wrapper per i modelli PyTorch
 - Cambiare logica di gestione memoria.
 - Integrare nuovi modelli AI.
 
+### 4. `backend/chimera_maker.py`
+**Ruolo**: Audio Hybridization Engine.
+**Descrizione**: Modulo specializzato per la pipeline "Chimera". Combina la voce reale dell'utente (per il timbro) con l'espressività generata dall'AI.
+
+**Funzionalità Core**:
+- `create_chimera_reference()`: Prende un audio utente e un audio AI (emotivo), e li fonde.
+- **Crossfading Intelligente**: Applica dissolvenze incrociate (50-200ms) per rendere impercettibile la giunzione tra i due audio.
+- Gestione segmenti temporali: Taglia e incolla i segmenti audio (es. prendere i primi 5s).
+
 ### 3. `backend/personality_manager.py`
 **Ruolo**: Data Persistence Layer.
 **Descrizione**: Gestisce il salvataggio e recupero delle "Personalità" (profili vocali custom). Non usa database, ma file system (JSON + WAV).
@@ -110,7 +120,8 @@ Interfaccia web moderna (Glassmorphism) senza framework pesanti (Vanilla JS).
 - `setupHomepage()`: Gestisce la transizione iniziale Homepage -> App.
 - `switchTab(modelType)`: Chiama `/api/switch_model` e gestisce le animazioni di cambio pannello.
 - `generate(params)`: Effettua la richiesta POST a `/api/generate_stream` e legge lo stream SSE. Decodifica i chunk JSON (`data: {...}`) per aggiornare la progress bar e gestire l'URL audio finale.
-- `setupPersonalityBuilder()`: Logica per il modale di creazione personalità (upload multiplo file).
+- `setupPersonalityBuilder()`: Logica per il modale di creazione personalità (Manual & Smart Mode).
+- **Gestione Chimera**: UI per il mixaggio voce utente/AI, con slider per crossfade e temperatura.
 
 ### 3. `frontend/style.css`
 **Ruolo**: Styling & Design System.

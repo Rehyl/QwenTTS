@@ -18,6 +18,7 @@ from pathlib import Path
 
 from model_manager import ModelManager
 from personality_manager import PersonalityManager
+from chimera_maker import ChimeraMaker
 
 app = Flask(__name__, static_folder="../frontend")
 CORS(app)
@@ -29,6 +30,7 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 PERSONALITIES_DIR = Path(__file__).parent.parent / "saved_personalities"
 PERSONALITIES_DIR.mkdir(exist_ok=True)
 personality_manager = PersonalityManager(PERSONALITIES_DIR)
+chimera_maker = ChimeraMaker()
 
 
 @app.route("/")
@@ -67,6 +69,7 @@ def switch_model():
         )
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
 
@@ -440,6 +443,174 @@ def delete_personality(name):
         return jsonify({"success": True, "message": f"Personalità '{name}' eliminata"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/personality/create_smart", methods=["POST"])
+def create_smart_personality():
+    """
+    Crea una Smart Personality usando la Chimera Reference Pipeline.
+    Usa SSE streaming per comunicare il progresso in tempo reale.
+
+    Input (multipart/form-data):
+    - name: Nome personalità
+    - voice_description: Descrizione voce per VoiceDesign
+    - audio_neutro: File audio neutro utente
+    - emotions: JSON array con lista emozioni da generare
+    - segment_duration_ms: (opzionale) Durata segmenti chimera in ms (default: 5000)
+    - crossfade_ms: (opzionale) Durata crossfade in ms (default: 100)
+
+    Output: SSE stream con eventi di progresso
+    """
+
+    # Extract all request data BEFORE creating the generator
+    # This avoids the "Working outside of request context" error
+    try:
+        form_name = request.form.get("name")
+        form_voice_description = request.form.get("voice_description")
+        form_emotions_json = request.form.get("emotions", "[]")
+        form_segment_duration_ms = int(request.form.get("segment_duration_ms", 5000))
+        form_crossfade_ms = int(request.form.get("crossfade_ms", 100))
+
+        # Validate before proceeding
+        if not form_name or not form_voice_description:
+            return jsonify({"error": "Nome e descrizione voce sono richiesti"}), 400
+
+        # Parse emotions early
+        form_emotions = json.loads(form_emotions_json)
+        if not form_emotions or len(form_emotions) == 0:
+            return jsonify({"error": "Almeno un'emozione è richiesta"}), 400
+
+        # Get and save the audio file immediately (while in request context)
+        if "audio_neutro" not in request.files:
+            return jsonify({"error": "File audio neutro mancante"}), 400
+
+        audio_file = request.files["audio_neutro"]
+        if audio_file.filename == "":
+            return jsonify({"error": "Nessun file audio selezionato"}), 400
+
+        # Save the audio file now, while we still have request context
+        temp_audio_filename = f"{uuid.uuid4().hex}_source.wav"
+        temp_audio_path = OUTPUT_DIR / temp_audio_filename
+        audio_file.save(str(temp_audio_path))
+
+    except Exception as e:
+        return jsonify({"error": f"Errore validazione: {str(e)}"}), 400
+
+    def generate_with_progress():
+        """Generatore SSE per streaming progresso"""
+        progress_state = {
+            "progress": 0,
+            "stage": "Inizializzazione...",
+            "done": False,
+            "error": None,
+        }
+
+        def progress_callback(stage: str, progress: int):
+            """Callback per aggiornare lo stato del progresso"""
+            progress_state["stage"] = stage
+            progress_state["progress"] = progress
+
+        def generation_thread():
+            """Thread che esegue la creazione effettiva"""
+            try:
+                # Use pre-extracted form data (captured in closure)
+                name = form_name
+                voice_description = form_voice_description
+                emotions = form_emotions
+                segment_duration_ms = form_segment_duration_ms
+                crossfade_ms = form_crossfade_ms
+
+                progress_state["stage"] = "Caricamento audio..."
+                progress_state["progress"] = 2
+
+                try:
+                    # Trascrivi l'audio
+                    progress_state["stage"] = "Trascrizione audio (Whisper)..."
+                    progress_state["progress"] = 5
+                    transcript = manager.transcribe(str(temp_audio_path))
+
+                    # Carica il modello VoiceDesign
+                    progress_state["stage"] = "Caricamento modello VoiceDesign..."
+                    progress_state["progress"] = 10
+                    if manager.current_model_type != "design":
+                        manager.load_model("design")
+
+                    progress_state["stage"] = "Generazione emozioni..."
+                    progress_state["progress"] = 15
+
+                    # Crea la smart personality
+                    config = personality_manager.create_smart(
+                        name=name,
+                        voice_description=voice_description,
+                        source_audio_path=temp_audio_path,
+                        source_transcript=transcript,
+                        emotions=emotions,
+                        model_manager=manager,
+                        chimera_maker=chimera_maker,
+                        segment_duration_ms=segment_duration_ms,
+                        crossfade_ms=crossfade_ms,
+                        progress_callback=progress_callback,
+                    )
+
+                    progress_state["stage"] = "Completato!"
+                    progress_state["progress"] = 100
+                    progress_state["personality_name"] = config["name"]
+                    progress_state["done"] = True
+
+                finally:
+                    # Pulizia file temporaneo
+                    try:
+                        temp_audio_path.unlink()
+                    except Exception:
+                        pass
+
+            except Exception as e:
+                import traceback
+
+                traceback.print_exc()
+                progress_state["error"] = str(e)
+                progress_state["done"] = True
+
+        # Avvia thread generazione
+        thread = threading.Thread(target=generation_thread)
+        thread.start()
+
+        # Stream aggiornamenti progresso
+        last_progress = -1
+        last_heartbeat = time.time()
+
+        while not progress_state["done"]:
+            current_time = time.time()
+            # Invia aggiornamento se il progresso è cambiato O per heartbeat
+            if (
+                progress_state["progress"] != last_progress
+                or (current_time - last_heartbeat) > 2
+            ):
+                update = {
+                    "progress": progress_state["progress"],
+                    "stage": progress_state["stage"],
+                }
+                yield f"data: {json.dumps(update)}\n\n"
+                last_progress = progress_state["progress"]
+                last_heartbeat = current_time
+
+            time.sleep(0.5)  # Controlla ogni 500ms
+
+        # Invia risultato finale
+        if progress_state["error"]:
+            yield f"data: {json.dumps({'error': progress_state['error']})}\n\n"
+        else:
+            final = {
+                "progress": 100,
+                "stage": "Completato!",
+                "done": True,
+                "personality_name": progress_state.get("personality_name"),
+            }
+            yield f"data: {json.dumps(final)}\n\n"
+
+    return Response(
+        stream_with_context(generate_with_progress()), mimetype="text/event-stream"
+    )
 
 
 if __name__ == "__main__":

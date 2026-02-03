@@ -8,6 +8,11 @@ Applicazione web per Text-to-Speech con **Qwen3-TTS**, ottimizzata per **RTX 207
   - **Voice Clone** - Clona qualsiasi voce da un audio di riferimento
   - **Custom Voice** - Usa speaker predefiniti (Vivian, Ryan, Alya, ecc.) con controllo emotivo
   - **Voice Design** - Crea voci personalizzate da descrizione testuale
+  - **Chimera Pipeline** - Generazione ibrida (Timbro Reale + Emotività AI) per realismo estremo
+
+- **Personality Builder 2.0:**
+  - **Smart Mode**: Creazione automatica di personalità multilingua/multi-emozione da un singolo file.
+  - **Manuale**: Controllo granulare su ogni singolo sample emotivo.
 
 - **Gestione Intelligente VRAM:**
   - Un solo modello in GPU alla volta (~4.5GB)
@@ -130,6 +135,11 @@ Poi apri il browser su: **http://localhost:5000**
 4. (Opzionale) Aggiungi istruzioni emotive es: "Parla con tono allegro"
 5. Premi **Genera Audio**
 
+#### 🔧 Chimera Adjustments
+Selezionando una voce Custom, puoi attivare la pipeline **Chimera**:
+- Usa lo slider **Temperature** per variare la creatività dell'intonazione.
+- Usa lo slider **Crossfade** per gestire la fusione tra la voce base e l'emozione generata.
+
 ### 3. Voice Design
 1. Clicca sul tab **✨ Voice Design**
 2. Descrivi la voce desiderata (es: "Voce maschile giovane, tono professionale")
@@ -144,7 +154,8 @@ Poi apri il browser su: **http://localhost:5000**
 QwenTTS/
 ├── backend/
 │   ├── app.py              # Server Flask con API REST e SSE
-│   └── model_manager.py    # Gestione lazy loading modelli e Whisper
+│   ├── model_manager.py    # Gestione lazy loading modelli e Whisper
+│   └── chimera_maker.py    # Pipeline ibrida audio crossfading
 ├── frontend/
 │   ├── index.html          # Interfaccia web con WaveSurfer.js
 │   ├── style.css           # Stili dark mode

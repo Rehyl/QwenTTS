@@ -20,6 +20,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupModeToggle();
 
     document.getElementById('extract-text-btn').addEventListener('click', extractText);
+
+    // Temperature slider
+    document.getElementById('temperature-slider').addEventListener('input', (e) => {
+        document.getElementById('temp-value').textContent = e.target.value;
+    });
+
+    // Crossfade slider  
+    document.getElementById('crossfade-input').addEventListener('input', (e) => {
+        document.getElementById('crossfade-value').textContent = e.target.value + 'ms';
+    });
 });
 
 // === Homepage Setup ===
@@ -375,6 +385,9 @@ async function generateBase() {
         params.end_time = end;
     }
 
+    // Add temperature parameter
+    params.temperature = parseFloat(document.getElementById('temperature-slider').value);
+
     await generate(params);
 }
 
@@ -557,12 +570,43 @@ function setupPersonalityBuilder() {
     const addEmotionBtn = document.getElementById('add-emotion-btn');
     const saveBtn = document.getElementById('save-personality-btn');
 
+    // Builder mode toggle
+    let currentBuilderMode = 'manual';
+    const builderModeBtns = document.querySelectorAll('[data-builder-mode]');
+    const manualPanel = document.getElementById('manual-builder-panel');
+    const smartPanel = document.getElementById('smart-builder-panel');
+
     openBtn.addEventListener('click', () => {
         modal.classList.remove('hidden');
-        // Add one emotion row by default
+        // Reset to manual mode
+        currentBuilderMode = 'manual';
+        builderModeBtns.forEach(b => b.classList.remove('active'));
+        builderModeBtns[0].classList.add('active');
+        manualPanel.classList.remove('hidden');
+        smartPanel.classList.add('hidden');
+        // Add one emotion row by default in manual mode
         document.getElementById('emotion-rows-container').innerHTML = '';
         emotionRowCounter = 0;
         addEmotionRow();
+    });
+
+    // Mode toggle listeners
+    builderModeBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const mode = btn.dataset.builderMode;
+            currentBuilderMode = mode;
+
+            builderModeBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            if (mode === 'manual') {
+                manualPanel.classList.remove('hidden');
+                smartPanel.classList.add('hidden');
+            } else {
+                manualPanel.classList.add('hidden');
+                smartPanel.classList.remove('hidden');
+            }
+        });
     });
 
     closeBtn.addEventListener('click', () => {
@@ -611,6 +655,21 @@ function addEmotionRow() {
 
 // Save personality
 async function savePersonality() {
+    // Check mode
+    const builderModeBtns = document.querySelectorAll('[data-builder-mode]');
+    let currentBuilderMode = 'manual';
+    builderModeBtns.forEach(btn => {
+        if (btn.classList.contains('active')) {
+            currentBuilderMode = btn.dataset.builderMode;
+        }
+    });
+
+    if (currentBuilderMode === 'smart') {
+        await createSmartPersonality();
+        return;
+    }
+
+    // Manual mode logic (existing)
     const name = document.getElementById('personality-name-input').value.trim();
     if (!name) {
         alert('Inserisci un nome per la personalità');
@@ -679,6 +738,7 @@ function setupModeToggle() {
     const manualGroup = document.querySelector('.manual-mode-group');
     const personalityGroup = document.querySelector('.personality-select-group');
     const personalitySelect = document.getElementById('personality-select');
+    const deleteBtn = document.getElementById('delete-personality-btn');
 
     modeBtns.forEach(btn => {
         btn.addEventListener('click', () => {
@@ -696,6 +756,7 @@ function setupModeToggle() {
                 manualGroup.classList.remove('hidden');
                 personalityGroup.classList.add('hidden');
                 document.querySelector('.tag-toolbar-container').classList.add('hidden');
+                deleteBtn.classList.add('hidden');
             } else {
                 manualGroup.classList.add('hidden');
                 personalityGroup.classList.remove('hidden');
@@ -709,9 +770,13 @@ function setupModeToggle() {
 
         if (!personalityName) {
             document.querySelector('.tag-toolbar-container').classList.add('hidden');
+            deleteBtn.classList.add('hidden');
             selectedPersonality = null;
             return;
         }
+
+        // Show delete button when a personality is selected
+        deleteBtn.classList.remove('hidden');
 
         // Load personality details
         try {
@@ -742,6 +807,51 @@ function setupModeToggle() {
             alert('Errore caricamento personalità: ' + e.message);
         }
     });
+
+    // Delete personality button
+    deleteBtn.addEventListener('click', async () => {
+        const personalityName = personalitySelect.value;
+
+        if (!personalityName) {
+            return;
+        }
+
+        // Confirm deletion
+        const confirmDelete = confirm(
+            `Sei sicuro di voler eliminare la personalità "${personalityName}"?\n\nQuesta azione non può essere annullata.`
+        );
+
+        if (!confirmDelete) {
+            return;
+        }
+
+        try {
+            const res = await fetch(`${API_BASE}/api/personality/${personalityName}`, {
+                method: 'DELETE'
+            });
+
+            const data = await res.json();
+
+            if (data.error) {
+                alert('Errore durante l\'eliminazione: ' + data.error);
+                return;
+            }
+
+            // Success!
+            alert(`Personalità "${personalityName}" eliminata con successo!`);
+
+            // Reset UI
+            selectedPersonality = null;
+            deleteBtn.classList.add('hidden');
+            document.querySelector('.tag-toolbar-container').classList.add('hidden');
+
+            // Reload personalities list
+            await loadPersonalities();
+
+        } catch (e) {
+            alert('Errore durante l\'eliminazione: ' + e.message);
+        }
+    });
 }
 
 // Insert tag at cursor position
@@ -764,4 +874,102 @@ function updateStatusBar(status) {
         status.model_loaded ? `Modello: ${status.model_loaded}` : 'Nessun modello';
     document.getElementById('vram-status').textContent =
         `VRAM: ${status.vram_used_gb} GB`;
+}
+
+// Create Smart Personality
+async function createSmartPersonality() {
+    const name = document.getElementById('personality-name-input').value.trim();
+    const voiceDesc = document.getElementById('voice-desc-input').value.trim();
+    const audioFile = document.getElementById('smart-audio-input').files[0];
+    const crossfade = parseInt(document.getElementById('crossfade-input').value);
+
+    if (!name) {
+        alert('Inserisci un nome per la personalità');
+        return;
+    }
+
+    if (!voiceDesc) {
+        alert('Inserisci una descrizione della voce');
+        return;
+    }
+
+    if (!audioFile) {
+        alert('Carica un file audio neutro');
+        return;
+    }
+
+    // Get selected emotions
+    const checkboxes = document.querySelectorAll('#emotion-checkboxes input[type="checkbox"]:checked');
+    const emotions = Array.from(checkboxes).map(cb => cb.value);
+
+    if (emotions.length === 0) {
+        alert('Seleziona almeno un\'emozione da generare');
+        return;
+    }
+
+    // Prepare FormData
+    const formData = new FormData();
+    formData.append('name', name);
+    formData.append('voice_description', voiceDesc);
+    formData.append('audio_neutro', audioFile);
+    formData.append('emotions', JSON.stringify(emotions));
+    formData.append('crossfade_ms', crossfade.toString());
+
+    // Show progress UI
+    const progressDiv = document.getElementById('smart-progress');
+    const progressFill = document.getElementById('smart-progress-fill');
+    const progressStage = document.getElementById('smart-progress-stage');
+    progressDiv.classList.remove('hidden');
+
+    const saveBtn = document.getElementById('save-personality-btn');
+    saveBtn.disabled = true;
+
+    try {
+        // Use SSE streaming
+        const response = await fetch(`${API_BASE}/api/personality/create_smart`, {
+            method: 'POST',
+            body: formData
+        });
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value);
+            const lines = chunk.split('\n\n');
+
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const data = JSON.parse(line.slice(6));
+
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+
+                    // Update progress
+                    if (data.progress !== undefined) {
+                        progressFill.style.width = `${data.progress}%`;
+                        progressStage.textContent = data.stage || 'Elaborando...';
+                    }
+
+                    // If done
+                    if (data.done) {
+                        alert(`Smart Personality "${name}" creata con successo!`);
+                        document.getElementById('personality-builder-modal').classList.add('hidden');
+                        await loadPersonalities();
+                        break;
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        alert('Errore creazione Smart Personality: ' + e.message);
+    } finally {
+        saveBtn.disabled = false;
+        progressDiv.classList.add('hidden');
+        progressFill.style.width = '0%';
+    }
 }

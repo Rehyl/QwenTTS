@@ -308,11 +308,15 @@ class ModelManager:
             temp_slice_path = Path(tmp.name)
 
         try:
+            # Extract temperature parameter (default: 0.7)
+            temperature = params.get("temperature", 0.7)
+
             return self.current_model.generate_voice_clone(
                 text=params["text"],
                 language=params.get("language", "Auto"),
                 ref_audio=str(temp_slice_path),
                 ref_text=params["ref_text"],
+                temperature=temperature,
             )
         finally:
             # Pulizia file temporaneo
@@ -335,6 +339,51 @@ class ModelManager:
             text=params["text"],
             language=params.get("language", "Auto"),
             instruct=params["instruct"],
+        )
+
+    def generate_emotional_guide(
+        self, text: str, voice_description: str, emotion: str, language: str = "Auto"
+    ) -> tuple:
+        """
+        Genera un audio "guida emotiva" usando il modello VoiceDesign.
+        Questo audio verrà usato per creare le chimere.
+
+        Args:
+            text: Testo da sintetizzare
+            voice_description: Descrizione base della voce (es. "Uomo italiano giovane")
+            emotion: Emozione target (es. "rabbia", "felicità")
+            language: Lingua del testo
+
+        Returns:
+            Tuple (wavs, sample_rate) dell'audio emozionale generato
+
+        Raises:
+            RuntimeError: Se il modello VoiceDesign non è caricato
+        """
+        if self.current_model_type != "design":
+            raise RuntimeError(
+                "Modello VoiceDesign non caricato. Chiamare load_model('design') prima."
+            )
+
+        # Costruisci il prompt per l'emozione
+        emotion_prompts = {
+            "rabbia": "parlando con estrema rabbia e frustrazione, voce alta e concitata",
+            "felicità": "parlando con grande gioia ed entusiasmo, tono allegro e vivace",
+            "paura": "parlando con paura e timore, voce tremante e incerta",
+            "tristezza": "parlando con profonda tristezza e malinconia, voce bassa e lenta",
+            "sorpresa": "parlando con grande sorpresa e stupore, tono esclamativo",
+            "neutro": "parlando con tono neutro e naturale",
+        }
+
+        emotion_suffix = emotion_prompts.get(
+            emotion.lower(), f"parlando con emozione: {emotion}"
+        )
+
+        # Combina descrizione voce + emozione
+        full_instruct = f"{voice_description}, {emotion_suffix}"
+
+        return self.current_model.generate_voice_design(
+            text=text, language=language, instruct=full_instruct
         )
 
     def get_status(self) -> dict:
